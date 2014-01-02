@@ -37,28 +37,28 @@ newVariable desc = state modifyNet
 addFactor :: MonadState BayesNetwork m => Factor -> m ()
 addFactor f = state $ \net -> ((), net { bnetFactors = f : bnetFactors net })
 
-unsafeTranslateIndices :: BayesNetwork -> [Variable] -> [Variable] -> Int -> Int
-unsafeTranslateIndices net = translate
+unsafeSqueezeIndices :: BayesNetwork -> [Variable] -> [Variable] -> Int -> Int
+unsafeSqueezeIndices net = squeeze
   where
     variables = bnetVariables net
     getDim var = vardescDim $ variables IntMap.! var
-    translateError = error "unsafeTranslateIndices: vars2 is not subset of vars1"
+    squeezeError = error "unsafeSqueezeIndices: vars2 is not subset of vars1"
 
-    translate :: [Variable] -> [Variable] -> Int -> Int
-    translate vars1@(v1 : vs1) vars2@(v2 : vs2)
+    squeeze :: [Variable] -> [Variable] -> Int -> Int
+    squeeze vars1@(v1 : vs1) vars2@(v2 : vs2)
       | v1 == v2 = let dim = getDim v1
-                       acc = translate vs1 vs2
+                       acc = squeeze vs1 vs2
                    in (\x -> let (d, r) = x `divMod` dim
                              in acc d * dim + r)
       | v1 < v2 = let dim = getDim v1
-                      acc = translate vs1 vars2
+                      acc = squeeze vs1 vars2
                   in \x -> acc (x `div` dim)
-      | otherwise = translateError
-    translate (v1 : vs1) [] = let dim = getDim v1
-                                  acc = translate vs1 []
+      | otherwise = squeezeError
+    squeeze (v1 : vs1) [] = let dim = getDim v1
+                                  acc = squeeze vs1 []
                               in \x -> acc (x `div` dim)
-    translate [] (v2 : vs2) = translateError
-    translate [] [] = id
+    squeeze [] (v2 : vs2) = squeezeError
+    squeeze [] [] = id
 
 unsafeTransposeIndices :: BayesNetwork -> [Variable] -> [Variable] -> Int -> Int
 unsafeTransposeIndices net vars1 vars2 = \x -> sum $ zipWith (*) (getMatrixIndex x) offsets1
