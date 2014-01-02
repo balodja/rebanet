@@ -55,7 +55,7 @@ unsafeSqueezeIndices net = squeeze
                   in \x -> acc (x `div` dim)
       | otherwise = squeezeError
     squeeze (v1 : vs1) [] = let dim = getDim v1
-                                  acc = squeeze vs1 []
+                                acc = squeeze vs1 []
                               in \x -> acc (x `div` dim)
     squeeze [] (v2 : vs2) = squeezeError
     squeeze [] [] = id
