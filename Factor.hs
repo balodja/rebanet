@@ -5,6 +5,8 @@ import qualified Data.Vector as V
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 
+import Data.List (sort)
+
 import Control.Monad.State
 
 type Variable = Int
@@ -35,7 +37,13 @@ newVariable desc = state modifyNet
                     in (var, net { bnetVariables = IntMap.insert var desc variables })
 
 addFactor :: MonadState BayesNetwork m => Factor -> m ()
-addFactor f = state $ \net -> ((), net { bnetFactors = f : bnetFactors net })
+addFactor factor = do
+  net <- get
+  let vars = factorVariables factor
+      size = product [ vardescDim $ (bnetVariables net) IntMap.! v | v <- vars ]
+  if (size == V.length (factorData factor))
+    then put net { bnetFactors = normalizeFactorOrder net factor : bnetFactors net }
+    else error "addFactor: wrong vector length"
 
 unsafeSqueezeIndices :: BayesNetwork -> [Variable] -> [Variable] -> Int -> Int
 unsafeSqueezeIndices net = squeeze
@@ -68,6 +76,19 @@ unsafeTransposeIndices net vars1 vars2 = \x -> sum $ zipWith (*) (getMatrixIndex
     getMatrixIndex x = tail . map snd . scanl (divMod . fst) (x, 0) . map getDim $ vars1
     offsets2 = scanl (*) 1 . map getDim $ vars2
     offsets1 = [ x | var <- vars1, let Just x = lookup var (zip vars2 offsets2) ]
+
+unsafeTransposeFactor :: BayesNetwork -> Factor -> [Variable] -> Factor
+unsafeTransposeFactor net factor vars =
+  let getIndex = unsafeTransposeIndices net vars (factorVariables factor)
+      datum = factorData factor
+  in Factor vars (V.generate (V.length datum) $ (V.!) datum . getIndex)
+
+normalizeFactorOrder :: BayesNetwork -> Factor -> Factor
+normalizeFactorOrder net f =
+  let vars = factorVariables f
+      revars = sort vars
+  in if revars == vars
+     then f else unsafeTransposeFactor net f revars
 
 netExample :: BayesNetwork
 netExample = (`execState` emptyBayesNetwork) $ do
