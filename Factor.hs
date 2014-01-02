@@ -92,8 +92,9 @@ normalizeFactorOrder net f =
 
 netExample :: BayesNetwork
 netExample = (`execState` emptyBayesNetwork) $ do
-  varA <- newVariable $ VariableDescription 3
-  varB <- newVariable $ VariableDescription 2
-  addFactor $ Factor [varA, varB] (V.fromList [0.1, 0.2, 0.7, 0.4, 0.6, 0.0])
+  varA <- newVariable $ VariableDescription 2
+  varB <- newVariable $ VariableDescription 3
+  addFactor $ Factor [] (V.singleton 1)
+  addFactor $ Factor [varB, varA] (V.fromList [0.1, 0.2, 0.7, 0.4, 0.6, 0.0])
 
 main = return ()
