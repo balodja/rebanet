@@ -25,6 +25,7 @@ data BayesNetwork = BayesNetwork {
   , bnetFactors :: [Factor]
   } deriving (Eq, Show, Read)
 
+emptyBayesNetwork = BayesNetwork IntMap.empty []
 
 newVariable :: MonadState BayesNetwork m => VariableDescription -> m Variable
 newVariable desc = state modifyNet
@@ -36,4 +37,10 @@ newVariable desc = state modifyNet
 addFactor :: MonadState BayesNetwork m => Factor -> m ()
 addFactor f = state $ \net -> ((), net { bnetFactors = f : bnetFactors net })
 
-main = putStrLn "halo"
+netExample :: BayesNetwork
+netExample = (`execState` emptyBayesNetwork) $ do
+  varA <- newVariable $ VariableDescription 3
+  varB <- newVariable $ VariableDescription 2
+  addFactor $ Factor [varA, varB] (V.fromList [0.1, 0.2, 0.7, 0.4, 0.6, 0.0])
+
+main = return ()
