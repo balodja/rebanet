@@ -10,6 +10,6 @@ Cabal-Version:		>= 1.8
 --  Hs-Source-Dirs:   lib
 --  Exposed-Modules:  Ha.hs
 
---Executable sigmafdm
---  Main-is:		Sigma/FDM.hs
---  Hs-Source-Dirs: 	src
+Executable testit
+  Main-is:		Factor.hs
+  Build-Depends:	vector
