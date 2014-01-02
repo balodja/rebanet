@@ -60,6 +60,15 @@ unsafeTranslateIndices net = translate
     translate [] (v2 : vs2) = translateError
     translate [] [] = id
 
+unsafeTransposeIndices :: BayesNetwork -> [Variable] -> [Variable] -> Int -> Int
+unsafeTransposeIndices net vars1 vars2 = \x -> sum $ zipWith (*) (getMatrixIndex x) offsets1
+  where
+    variables = bnetVariables net
+    getDim var = vardescDim $ variables IntMap.! var
+    getMatrixIndex x = tail . map snd . scanl (divMod . fst) (x, 0) . map getDim $ vars1
+    offsets2 = scanl (*) 1 . map getDim $ vars2
+    offsets1 = [ x | var <- vars1, let Just x = lookup var (zip vars2 offsets2) ]
+
 netExample :: BayesNetwork
 netExample = (`execState` emptyBayesNetwork) $ do
   varA <- newVariable $ VariableDescription 3
