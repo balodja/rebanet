@@ -31,7 +31,7 @@ newVariable :: MonadState BayesNetwork m => VariableDescription -> m Variable
 newVariable desc = state modifyNet
   where
     modifyNet net = let variables = bnetVariables net
-                        var = succ . fst . IntMap.findMax $ variables
+                        var = succ . foldl max 0 . IntMap.keys $ variables
                     in (var, net { bnetVariables = IntMap.insert var desc variables })
 
 addFactor :: MonadState BayesNetwork m => Factor -> m ()
