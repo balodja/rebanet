@@ -6,10 +6,11 @@ Maintainer:		balodja@gmail.com
 Build-Type:		Simple
 Cabal-Version:		>= 1.8
 
---Library
+Library
 --  Hs-Source-Dirs:   lib
---  Exposed-Modules:  Ha.hs
-
-Executable testit
-  Main-is:		Factor.hs
+  Exposed-Modules:  Factor, BayesNetwork
   Build-Depends:	base >= 4, mtl >= 2, containers, vector
+
+Executable main
+  Main-is:		Main.hs
+  Build-Depends:	base

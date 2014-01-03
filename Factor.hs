@@ -1,7 +1,8 @@
-{-# LANGUAGE FlexibleContexts, NoImplicitPrelude #-}
+module Factor where
 
 import Prelude hiding (product)
 import qualified Prelude as P
+import Control.Monad (forM_)
 
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
@@ -11,8 +12,6 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 
 import Data.List (sort, union, (\\))
-
-import Control.Monad.State
 
 type Variable = Int
 type VariableMap = IntMap VariableDescription
@@ -27,30 +26,6 @@ data VariableDescription = VariableDescription {
 --  , vardescName :: String
 --  , vardescValues :: [String]
   } deriving (Eq, Show, Read)
-
-data BayesNetwork = BayesNetwork {
-    bnetVariables :: VariableMap
-  , bnetFactors :: [Factor]
-  } deriving (Eq, Show, Read)
-
-emptyBayesNetwork = BayesNetwork IntMap.empty []
-
-newVariable :: MonadState BayesNetwork m => VariableDescription -> m Variable
-newVariable desc = state modifyNet
-  where
-    modifyNet net = let variables = bnetVariables net
-                        var = succ . foldl max 0 . IntMap.keys $ variables
-                    in (var, net { bnetVariables = IntMap.insert var desc variables })
-
-addFactor :: MonadState BayesNetwork m => Factor -> m ()
-addFactor factor = do
-  net <- get
-  let vars = factorVariables factor
-      vmap = bnetVariables net
-      size = P.product [ vardescDim $ vmap IntMap.! v | v <- vars ]
-  if (size == V.length (factorData factor))
-    then put net { bnetFactors = normalizeFactorOrder vmap factor : bnetFactors net }
-    else error "addFactor: wrong vector length"
 
 unsafeSqueezeIndices :: VariableMap -> [Variable] -> [Variable] -> Int -> Int
 unsafeSqueezeIndices variables = squeeze
@@ -126,12 +101,3 @@ product vmap factors =
     0 -> Factor [] (V.singleton 1)
     1 -> head factors
     _ -> Factor vars $ foldl1 (V.zipWith (*)) vectors
-
-netExample :: BayesNetwork
-netExample = (`execState` emptyBayesNetwork) $ do
-  varA <- newVariable $ VariableDescription 2
-  varB <- newVariable $ VariableDescription 3
-  addFactor $ Factor [] (V.singleton 1)
-  addFactor $ Factor [varB, varA] (V.fromList [0.1, 0.2, 0.7, 0.4, 0.6, 0.0])
-
-main = return ()
