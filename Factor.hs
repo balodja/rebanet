@@ -10,6 +10,7 @@ import Data.List (sort)
 import Control.Monad.State
 
 type Variable = Int
+type VariableMap = IntMap VariableDescription
 
 data Factor = Factor {
     factorVariables :: [Variable]
@@ -23,7 +24,7 @@ data VariableDescription = VariableDescription {
   } deriving (Eq, Show, Read)
 
 data BayesNetwork = BayesNetwork {
-    bnetVariables :: IntMap VariableDescription
+    bnetVariables :: VariableMap
   , bnetFactors :: [Factor]
   } deriving (Eq, Show, Read)
 
@@ -40,15 +41,15 @@ addFactor :: MonadState BayesNetwork m => Factor -> m ()
 addFactor factor = do
   net <- get
   let vars = factorVariables factor
-      size = product [ vardescDim $ (bnetVariables net) IntMap.! v | v <- vars ]
+      vmap = bnetVariables net
+      size = product [ vardescDim $ vmap IntMap.! v | v <- vars ]
   if (size == V.length (factorData factor))
-    then put net { bnetFactors = normalizeFactorOrder net factor : bnetFactors net }
+    then put net { bnetFactors = normalizeFactorOrder vmap factor : bnetFactors net }
     else error "addFactor: wrong vector length"
 
-unsafeSqueezeIndices :: BayesNetwork -> [Variable] -> [Variable] -> Int -> Int
-unsafeSqueezeIndices net = squeeze
+unsafeSqueezeIndices :: VariableMap -> [Variable] -> [Variable] -> Int -> Int
+unsafeSqueezeIndices variables = squeeze
   where
-    variables = bnetVariables net
     getDim var = vardescDim $ variables IntMap.! var
     squeezeError = error "unsafeSqueezeIndices: vars2 is not subset of vars1"
 
@@ -68,27 +69,27 @@ unsafeSqueezeIndices net = squeeze
     squeeze [] (v2 : vs2) = squeezeError
     squeeze [] [] = id
 
-unsafeTransposeIndices :: BayesNetwork -> [Variable] -> [Variable] -> Int -> Int
-unsafeTransposeIndices net vars1 vars2 = \x -> sum $ zipWith (*) (getMatrixIndex x) offsets1
+unsafeTransposeIndices :: VariableMap -> [Variable] -> [Variable] -> Int -> Int
+unsafeTransposeIndices vmap varsFrom varsTo =
+  \x -> sum $ zipWith (*) (getMatrixIndex x) offsetsFrom
   where
-    variables = bnetVariables net
-    getDim var = vardescDim $ variables IntMap.! var
-    getMatrixIndex x = tail . map snd . scanl (divMod . fst) (x, 0) . map getDim $ vars1
-    offsets2 = scanl (*) 1 . map getDim $ vars2
-    offsets1 = [ x | var <- vars1, let Just x = lookup var (zip vars2 offsets2) ]
+    getDim var = vardescDim $ vmap IntMap.! var
+    getMatrixIndex x = tail . map snd . scanl (divMod . fst) (x, 0) . map getDim $ varsFrom
+    offsetsTo = scanl (*) 1 . map getDim $ varsTo
+    offsetsFrom = [ x | var <- varsFrom, let Just x = lookup var (zip varsTo offsetsTo) ]
 
-unsafeTransposeFactor :: BayesNetwork -> Factor -> [Variable] -> Factor
-unsafeTransposeFactor net factor vars =
-  let getIndex = unsafeTransposeIndices net vars (factorVariables factor)
+unsafeTransposeFactor :: VariableMap -> Factor -> [Variable] -> Factor
+unsafeTransposeFactor vmap factor vars =
+  let getIndex = unsafeTransposeIndices vmap vars (factorVariables factor)
       datum = factorData factor
   in Factor vars (V.generate (V.length datum) $ (V.!) datum . getIndex)
 
-normalizeFactorOrder :: BayesNetwork -> Factor -> Factor
-normalizeFactorOrder net f =
+normalizeFactorOrder :: VariableMap -> Factor -> Factor
+normalizeFactorOrder vmap f =
   let vars = factorVariables f
       revars = sort vars
   in if revars == vars
-     then f else unsafeTransposeFactor net f revars
+     then f else unsafeTransposeFactor vmap f revars
 
 netExample :: BayesNetwork
 netExample = (`execState` emptyBayesNetwork) $ do
