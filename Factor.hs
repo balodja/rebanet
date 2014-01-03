@@ -1,4 +1,7 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, NoImplicitPrelude #-}
+
+import Prelude hiding (product)
+import qualified Prelude as P
 
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
@@ -7,7 +10,7 @@ import Control.Monad.ST
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 
-import Data.List (sort, (\\))
+import Data.List (sort, union, (\\))
 
 import Control.Monad.State
 
@@ -44,7 +47,7 @@ addFactor factor = do
   net <- get
   let vars = factorVariables factor
       vmap = bnetVariables net
-      size = product [ vardescDim $ vmap IntMap.! v | v <- vars ]
+      size = P.product [ vardescDim $ vmap IntMap.! v | v <- vars ]
   if (size == V.length (factorData factor))
     then put net { bnetFactors = normalizeFactorOrder vmap factor : bnetFactors net }
     else error "addFactor: wrong vector length"
@@ -100,7 +103,7 @@ marginalize vmap diffvars f =
       squeezeIndex = unsafeSqueezeIndices vmap (factorVariables f) vars
       olddata = factorData f
       newdata = runST $ do
-        vec <- VM.unsafeNew $ product [ vardescDim $ vmap IntMap.! v | v <- vars ]
+        vec <- VM.unsafeNew $ P.product [ vardescDim $ vmap IntMap.! v | v <- vars ]
         VM.set vec 0
         forM_ [0 .. V.length olddata - 1] $ \oldI -> do
           let newI = squeezeIndex oldI
@@ -108,6 +111,21 @@ marginalize vmap diffvars f =
           VM.unsafeWrite vec newI (x + olddata V.! oldI)
         V.unsafeFreeze vec
   in Factor vars newdata
+
+unsafeExpand :: VariableMap -> [Variable] -> Factor -> Factor
+unsafeExpand vmap allvars f =
+  let getIndex = unsafeSqueezeIndices vmap allvars (factorVariables f)
+      size = P.product [ vardescDim $ vmap IntMap.! v | v <- allvars ]
+  in Factor allvars (V.generate size $ (V.!) (factorData f) . getIndex)
+
+product :: VariableMap -> [Factor] -> Factor
+product vmap factors =
+  let vars = sort . foldl union [] . map factorVariables $ factors
+      vectors = map (factorData . unsafeExpand vmap vars) $ factors
+  in case length factors of
+    0 -> Factor [] (V.singleton 1)
+    1 -> head factors
+    _ -> Factor vars $ foldl1 (V.zipWith (*)) vectors
 
 netExample :: BayesNetwork
 netExample = (`execState` emptyBayesNetwork) $ do
