@@ -1,11 +1,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 import qualified Data.Vector as V
+import qualified Data.Vector.Mutable as VM
+import Control.Monad.ST
 
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 
-import Data.List (sort)
+import Data.List (sort, (\\))
 
 import Control.Monad.State
 
@@ -90,6 +92,22 @@ normalizeFactorOrder vmap f =
       revars = sort vars
   in if revars == vars
      then f else unsafeTransposeFactor vmap f revars
+
+marginalize :: VariableMap -> [Variable] -> Factor -> Factor
+marginalize vmap diffvars f =
+      -- special difference for ascending lists would be a better choice
+  let vars = factorVariables f \\ diffvars
+      squeezeIndex = unsafeSqueezeIndices vmap (factorVariables f) vars
+      olddata = factorData f
+      newdata = runST $ do
+        vec <- VM.unsafeNew $ product [ vardescDim $ vmap IntMap.! v | v <- vars ]
+        VM.set vec 0
+        forM_ [0 .. V.length olddata - 1] $ \oldI -> do
+          let newI = squeezeIndex oldI
+          x <- VM.unsafeRead vec newI
+          VM.unsafeWrite vec newI (x + olddata V.! oldI)
+        V.unsafeFreeze vec
+  in Factor vars newdata
 
 netExample :: BayesNetwork
 netExample = (`execState` emptyBayesNetwork) $ do
