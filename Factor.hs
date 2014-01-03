@@ -4,8 +4,10 @@ import Prelude hiding (product)
 import qualified Prelude as P
 import Control.Monad (forM_)
 
-import qualified Data.Vector as V
-import qualified Data.Vector.Mutable as VM
+import Data.Semiring
+
+import qualified Data.Vector.Unboxed as V
+import qualified Data.Vector.Unboxed.Mutable as VM
 import Control.Monad.ST
 
 import Data.IntMap (IntMap)
@@ -16,9 +18,9 @@ import Data.List (sort, union, (\\))
 type Variable = Int
 type VariableMap = IntMap VariableDescription
 
-data Factor = Factor {
+data Factor a = Factor {
     factorVariables :: [Variable]
-  , factorData :: V.Vector Double
+  , factorData :: V.Vector a
   } deriving (Eq, Show, Read)
 
 data VariableDescription = VariableDescription {
@@ -58,20 +60,21 @@ unsafeTransposeIndices vmap varsFrom varsTo =
     offsetsTo = scanl (*) 1 . map getDim $ varsTo
     offsetsFrom = [ x | var <- varsFrom, let Just x = lookup var (zip varsTo offsetsTo) ]
 
-unsafeTransposeFactor :: VariableMap -> Factor -> [Variable] -> Factor
+unsafeTransposeFactor :: V.Unbox a => VariableMap -> Factor a -> [Variable] -> Factor a
 unsafeTransposeFactor vmap factor vars =
   let getIndex = unsafeTransposeIndices vmap vars (factorVariables factor)
       datum = factorData factor
   in Factor vars (V.generate (V.length datum) $ (V.!) datum . getIndex)
 
-normalizeFactorOrder :: VariableMap -> Factor -> Factor
+normalizeFactorOrder :: V.Unbox a => VariableMap -> Factor a -> Factor a
 normalizeFactorOrder vmap f =
   let vars = factorVariables f
       revars = sort vars
   in if revars == vars
      then f else unsafeTransposeFactor vmap f revars
 
-marginalize :: VariableMap -> [Variable] -> Factor -> Factor
+{-# INLINE marginalize #-}
+marginalize :: (V.Unbox a, Semiring a) => VariableMap -> [Variable] -> Factor a -> Factor a
 marginalize vmap diffvars f =
       -- special difference for ascending lists would be a better choice
   let vars = factorVariables f \\ diffvars
@@ -79,25 +82,26 @@ marginalize vmap diffvars f =
       olddata = factorData f
       newdata = runST $ do
         vec <- VM.unsafeNew $ P.product [ vardescDim $ vmap IntMap.! v | v <- vars ]
-        VM.set vec 0
+        VM.set vec zero
         forM_ [0 .. V.length olddata - 1] $ \oldI -> do
           let newI = squeezeIndex oldI
           x <- VM.unsafeRead vec newI
-          VM.unsafeWrite vec newI (x + olddata V.! oldI)
+          VM.unsafeWrite vec newI (x <+> olddata V.! oldI)
         V.unsafeFreeze vec
   in Factor vars newdata
 
-unsafeExpand :: VariableMap -> [Variable] -> Factor -> Factor
+unsafeExpand :: V.Unbox a => VariableMap -> [Variable] -> Factor a -> Factor a
 unsafeExpand vmap allvars f =
   let getIndex = unsafeSqueezeIndices vmap allvars (factorVariables f)
       size = P.product [ vardescDim $ vmap IntMap.! v | v <- allvars ]
   in Factor allvars (V.generate size $ (V.!) (factorData f) . getIndex)
 
-product :: VariableMap -> [Factor] -> Factor
+{-# INLINE product #-}
+product :: (V.Unbox a, Semiring a) => VariableMap -> [Factor a] -> Factor a
 product vmap factors =
   let vars = sort . foldl union [] . map factorVariables $ factors
       vectors = map (factorData . unsafeExpand vmap vars) $ factors
   in case length factors of
-    0 -> Factor [] (V.singleton 1)
+    0 -> Factor [] (V.singleton one)
     1 -> head factors
-    _ -> Factor vars $ foldl1 (V.zipWith (*)) vectors
+    _ -> Factor vars $ foldl1 (V.zipWith (<*>)) vectors

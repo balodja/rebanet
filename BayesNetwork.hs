@@ -3,7 +3,7 @@ module BayesNetwork where
 
 import qualified Factor as F
 
-import qualified Data.Vector as V
+import qualified Data.Vector.Unboxed as V
 
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
@@ -14,7 +14,7 @@ import Control.Monad.State
 
 data BayesNetwork = BayesNetwork {
     bnetVariables :: F.VariableMap
-  , bnetFactors :: [F.Factor]
+  , bnetFactors :: [F.Factor Double]
   } deriving (Eq, Show, Read)
 
 emptyBayesNetwork = BayesNetwork IntMap.empty []
@@ -26,7 +26,7 @@ newVariable desc = state modifyNet
                         var = succ . foldl max 0 . IntMap.keys $ variables
                     in (var, net { bnetVariables = IntMap.insert var desc variables })
 
-addFactor :: MonadState BayesNetwork m => F.Factor -> m ()
+addFactor :: MonadState BayesNetwork m => F.Factor Double -> m ()
 addFactor factor = do
   net <- get
   let vars = F.factorVariables factor
