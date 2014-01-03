@@ -2,7 +2,7 @@
 
 module Data.Semiring where
 
-import Data.Monoid as Monoid
+import Data.Monoid
 import Data.Function
 import Numeric.IEEE
 
@@ -16,16 +16,16 @@ class (Monoid (SemiringPlus v), Monoid (SemiringProduct v)) => Semiring v where
   fromProduct :: SemiringProduct v -> v
   
   zero :: v
-  zero = fromPlus Monoid.mempty
+  zero = fromPlus mempty
   infixl 6 <+>
   (<+>) :: v -> v -> v
-  (<+>) = ((fromPlus .).) ((Monoid.<>) `on` toPlus)
+  (<+>) = ((fromPlus .).) ((<>) `on` toPlus)
   
   one :: v
-  one = fromProduct Monoid.mempty
+  one = fromProduct mempty
   infixl 7 <*>
   (<*>) :: v -> v -> v
-  (<*>) = ((fromProduct .).) ((Monoid.<>) `on` toProduct)
+  (<*>) = ((fromProduct .).) ((<>) `on` toProduct)
 
 instance Semiring Double where
   type SemiringPlus Double = Sum Double
